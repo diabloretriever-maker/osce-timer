@@ -1,4 +1,4 @@
-const CACHE = "osce-timer-v1";
+const CACHE = "osce-timer-v2";
 const FILES = ["./", "index.html", "manifest.webmanifest", "icon.svg",
   ...["baca","masuk","pindah","selesai","sisa30d","sisa1","sisa2","sisa3","sisa4","sisa5","jeda","lanjut","silent"].map(c => `audio/${c}.mp3`)];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))); self.skipWaiting(); });
