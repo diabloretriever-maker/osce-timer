@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Timer OSCE</title>
+<meta name="theme-color" content="#111827">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+  :root {
+    --bg: #0f172a; --panel: #1e293b; --line: #334155; --text: #f1f5f9; --muted: #94a3b8;
+    --baca: #2563eb; --ujian: #16a34a; --pindah: #d97706; --selesai: #6b7280; --warn: #dc2626;
+    --phase: var(--muted);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { min-height: 100vh; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px;
+    border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 18px; margin: 0; font-weight: 650; letter-spacing: .2px; }
+  header .hint { color: var(--muted); font-size: 12px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; display: grid; gap: 20px;
+    grid-template-columns: minmax(0, 1fr) 340px; }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+
+  /* Timer */
+  #stage { display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; gap: 10px; min-height: 440px; border-top: 6px solid var(--phase);
+    transition: border-color .3s; }
+  #stage.fs { border-radius: 0; border: none; background: var(--bg); min-height: 100vh;
+    box-shadow: inset 0 14px 0 var(--phase); }
+  #phaseLabel { font-size: clamp(22px, 4vw, 40px); font-weight: 800; letter-spacing: 3px;
+    color: var(--phase); text-transform: uppercase; }
+  #stage.fs #phaseLabel { font-size: clamp(32px, 7vw, 90px); }
+  #clock { font-variant-numeric: tabular-nums; font-weight: 800; line-height: 1;
+    font-size: clamp(80px, 17vw, 190px); }
+  #stage.fs #clock { font-size: clamp(120px, 30vw, 460px); }
+  #clock.warn { color: var(--warn); }
+  #rotLabel { font-size: clamp(16px, 2.4vw, 24px); color: var(--muted); }
+  #stage.fs #rotLabel { font-size: clamp(22px, 3.6vw, 48px); }
+  #nextLabel { font-size: 15px; color: var(--muted); }
+  #stage.fs #nextLabel { font-size: clamp(16px, 2.2vw, 30px); }
+  #pausedBadge { display: none; background: var(--warn); color: #fff; font-weight: 700;
+    padding: 6px 14px; border-radius: 999px; letter-spacing: 2px; }
+  #stage.paused #pausedBadge { display: inline-block; }
+  .bar { width: min(640px, 90%); height: 10px; background: var(--line); border-radius: 99px; overflow: hidden; }
+  .bar > div { height: 100%; width: 0; background: var(--phase); }
+  #totalLine { font-size: 13px; color: var(--muted); }
+  #stage.fs #totalLine { font-size: clamp(14px, 1.8vw, 24px); }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 14px; }
+  #stage.fs .controls { opacity: .25; transition: opacity .2s; }
+  #stage.fs .controls:hover, #stage.fs .controls:focus-within { opacity: 1; }
+  button { font: inherit; border: 1px solid var(--line); background: #0b1222; color: var(--text);
+    padding: 10px 16px; border-radius: 10px; cursor: pointer; font-weight: 600; }
+  button:hover { border-color: var(--muted); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--ujian); border-color: var(--ujian); color: #fff; }
+  button.danger { color: #fca5a5; }
+  button.small { padding: 6px 10px; font-size: 13px; }
+
+  /* Settings */
+  aside h2 { font-size: 15px; margin: 0 0 12px; }
+  aside h3 { font-size: 13px; color: var(--muted); margin: 18px 0 8px; text-transform: uppercase; letter-spacing: 1px; }
+  .row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 14px; }
+  .dur { display: flex; align-items: center; gap: 4px; }
+  input[type=number], select, input[type=text] { font: inherit; background: #0b1222; color: var(--text);
+    border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+  input[type=number] { width: 62px; text-align: right; }
+  .unit { color: var(--muted); font-size: 12px; }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
+  #summary { font-size: 13px; color: var(--muted); line-height: 1.5; margin-top: 6px; }
+  .presetRow { display: flex; gap: 6px; margin-bottom: 8px; }
+  .presetRow > :first-child { flex: 1; min-width: 0; }
+  .note { font-size: 12px; color: var(--muted); line-height: 1.5; }
+  aside fieldset { border: none; padding: 0; margin: 0; }
+  aside fieldset:disabled { opacity: .5; }
+  kbd { background: #0b1222; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: 11px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Timer OSCE</h1>
+  <span class="hint"><kbd>Spasi</kbd> jeda/lanjut · <kbd>→</kbd> fase berikutnya · <kbd>←</kbd> mundur · <kbd>F</kbd> layar penuh</span>
+</header>
+
+<main>
+  <section id="stage" class="card" aria-live="polite">
+    <span id="pausedBadge">DIJEDA</span>
+    <div id="phaseLabel">Siap</div>
+    <div id="clock">00:00</div>
+    <div id="rotLabel">Atur waktu di panel kanan, lalu tekan Mulai</div>
+    <div class="bar"><div id="bar"></div></div>
+    <div id="nextLabel"></div>
+    <div id="totalLine"></div>
+    <div class="controls">
+      <button id="btnStart" class="primary">▶ Mulai</button>
+      <button id="btnPause" disabled>⏸ Jeda</button>
+      <button id="btnBack" disabled>⏮ Mundur</button>
+      <button id="btnSkip" disabled>⏭ Fase berikutnya</button>
+      <button id="btnReset" class="danger" disabled>⟲ Ulang</button>
+      <button id="btnFs">⛶ Layar penuh</button>
+    </div>
+  </section>
+
+  <aside class="card">
+    <h2>Pengaturan</h2>
+    <fieldset id="cfgFields">
+      <div class="row"><label for="stations">Jumlah stasiun</label>
+        <div class="dur"><input type="number" id="stations" min="1" max="60" value="10"></div></div>
+
+      <div class="row"><label><span class="swatch" style="background:var(--baca)"></span>Membaca soal</label>
+        <div class="dur"><input type="number" id="bacaM" min="0" max="120" value="1"><span class="unit">mnt</span>
+          <input type="number" id="bacaS" min="0" max="59" value="0"><span class="unit">dtk</span></div></div>
+
+      <div class="row"><label><span class="swatch" style="background:var(--ujian)"></span>Ujian di ruangan</label>
+        <div class="dur"><input type="number" id="ujianM" min="0" max="240" value="10"><span class="unit">mnt</span>
+          <input type="number" id="ujianS" min="0" max="59" value="0"><span class="unit">dtk</span></div></div>
+
+      <div class="row"><label><span class="swatch" style="background:var(--pindah)"></span>Pindah stasiun</label>
+        <div class="dur"><input type="number" id="pindahM" min="0" max="120" value="1"><span class="unit">mnt</span>
+          <input type="number" id="pindahS" min="0" max="59" value="0"><span class="unit">dtk</span></div></div>
+
+      <div class="row"><label for="warn">Peringatan sebelum ujian habis</label>
+        <select id="warn">
+          <option value="0">Tidak ada</option>
+          <option value="30">30 detik</option>
+          <option value="60" selected>1 menit</option>
+          <option value="120">2 menit</option>
+          <option value="180">3 menit</option>
+          <option value="240">4 menit</option>
+          <option value="300">5 menit</option>
+        </select></div>
+
+      <div id="summary"></div>
+    </fieldset>
+
+    <h3>Suara</h3>
+    <div class="row"><label for="voice">Pengumuman suara</label>
+      <input type="checkbox" id="voice" checked></div>
+    <div class="row"><label for="pauseVoice">Umumkan saat jeda/lanjut</label>
+      <input type="checkbox" id="pauseVoice" checked></div>
+    <div class="row"><label for="volume">Volume</label>
+      <input type="range" id="volume" min="0" max="1" step="0.05" value="1"></div>
+    <div class="presetRow">
+      <select id="testSel">
+        <option value="baca">Tes: mulai membaca</option>
+        <option value="ujian">Tes: masuk ruangan</option>
+        <option value="peringatan">Tes: peringatan</option>
+        <option value="pindah">Tes: pindah stasiun</option>
+        <option value="selesai">Tes: ujian selesai</option>
+      </select>
+      <button id="btnTest" class="small">▶ Putar</button>
+    </div>
+
+    <h3>Preset</h3>
+    <div class="presetRow">
+      <input type="text" id="presetName" placeholder="Nama preset, mis. OSCE Blok 12">
+      <button id="btnSavePreset" class="small">Simpan</button>
+    </div>
+    <div class="presetRow">
+      <select id="presetList"><option value="">— pilih preset —</option></select>
+      <button id="btnLoadPreset" class="small">Muat</button>
+      <button id="btnDelPreset" class="small danger">Hapus</button>
+    </div>
+    <p class="note">Pengaturan terakhir dan preset tersimpan di browser perangkat ini.</p>
+    <p class="note">Selama ujian berjalan layar dijaga tetap menyala. Di iPhone/iPad, matikan mode senyap. Setelah dibuka sekali, aplikasi tetap jalan tanpa internet.</p>
+  </aside>
+</main>
+
+<audio id="keepAlive" src="audio/silent.mp3" loop preload="auto" playsinline></audio>
+
+<script>
+(() => {
+  "use strict";
+  const $ = id => document.getElementById(id);
+  const CLIPS = ["baca","masuk","pindah","selesai","sisa30d","sisa1","sisa2","sisa3","sisa4","sisa5","jeda","lanjut"];
+  const WARN_CLIP = {30:"sisa30d",60:"sisa1",120:"sisa2",180:"sisa3",240:"sisa4",300:"sisa5"};
+  const LABEL = { baca: "Membaca soal", ujian: "Ujian", pindah: "Pindah stasiun", selesai: "Selesai" };
+  const COLOR = { baca: "var(--baca)", ujian: "var(--ujian)", pindah: "var(--pindah)", selesai: "var(--selesai)" };
+  const LS_CFG = "osceTimer.cfg.v1", LS_PRESETS = "osceTimer.presets.v1";
+
+  /* ---------- storage helpers ---------- */
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+  };
+
+  /* ---------- config ---------- */
+  const FIELDS = ["stations","bacaM","bacaS","ujianM","ujianS","pindahM","pindahS","warn","voice","pauseVoice","volume"];
+  function readCfg() {
+    const n = id => Math.max(0, Math.floor(Number($(id).value) || 0));
+    return {
+      stations: Math.max(1, n("stations")),
+      baca: n("bacaM") * 60 + Math.min(59, n("bacaS")),
+      ujian: n("ujianM") * 60 + Math.min(59, n("ujianS")),
+      pindah: n("pindahM") * 60 + Math.min(59, n("pindahS")),
+      warn: Number($("warn").value),
+      voice: $("voice").checked,
+      pauseVoice: $("pauseVoice").checked,
+      volume: Number($("volume").value)
+    };
+  }
+  function snapshot() {
+    const o = {};
+    FIELDS.forEach(f => { const el = $(f); o[f] = el.type === "checkbox" ? el.checked : el.value; });
+    return o;
+  }
+  function applySnapshot(o) {
+    if (!o) return;
+    FIELDS.forEach(f => { if (f in o) { const el = $(f); if (el.type === "checkbox") el.checked = !!o[f]; else el.value = o[f]; } });
+  }
+
+  /* ---------- timeline ---------- */
+  let phases = [], events = [], total = 0;
+  function build(cfg) {
+    phases = []; events = [];
+    let t = 0;
+    for (let i = 1; i <= cfg.stations; i++) {
+      if (cfg.baca > 0) { phases.push({ type: "baca", start: t, dur: cfg.baca, rot: i }); t += cfg.baca; }
+      phases.push({ type: "ujian", start: t, dur: cfg.ujian, rot: i }); t += cfg.ujian;
+      if (i < cfg.stations && cfg.pindah > 0) { phases.push({ type: "pindah", start: t, dur: cfg.pindah, rot: i }); t += cfg.pindah; }
+    }
+    total = t;
+    phases.forEach((p, idx) => {
+      const prev = phases[idx - 1];
+      const seq = [];
+      // exam ended straight into reading (no move phase): announce the move first
+      if (p.type !== "pindah" && prev && prev.type === "ujian") seq.push({ bell: 3 }, { clip: "pindah" });
+      if (p.type === "baca") seq.push({ bell: 1 }, { clip: "baca" });
+      if (p.type === "ujian") seq.push({ bell: 2 }, { clip: "masuk" });
+      if (p.type === "pindah") seq.push({ bell: 3 }, { clip: "pindah" });
+      events.push({ t: p.start, seq });
+      if (p.type === "ujian" && cfg.warn > 0 && cfg.warn < p.dur)
+        events.push({ t: p.start + p.dur - cfg.warn, seq: [{ bell: "w" }, { clip: WARN_CLIP[cfg.warn] }] });
+    });
+    events.push({ t: total, seq: [{ bell: 3 }, { clip: "selesai" }] });
+  }
+  function phaseAt(e) {
+    for (let i = phases.length - 1; i >= 0; i--) if (e >= phases[i].start) return i;
+    return 0;
+  }
+
+  /* ---------- audio ---------- */
+  const AC = window.AudioContext || window.webkitAudioContext;
+  const ctx = new AC();
+  const master = ctx.createGain(); master.connect(ctx.destination);
+  const buffers = {};
+  let live = []; // scheduled sources
+
+  function makeBell(count, freq, spacing, len, level) {
+    const sr = ctx.sampleRate, dur = spacing * (count - 1) + len;
+    const buf = ctx.createBuffer(1, Math.ceil(sr * dur), sr), d = buf.getChannelData(0);
+    const partials = [[1, 1], [2.0, .45], [2.76, .25], [5.4, .1]];
+    for (let k = 0; k < count; k++) {
+      const off = Math.floor(k * spacing * sr);
+      for (let i = 0; i < len * sr && off + i < d.length; i++) {
+        const t = i / sr, env = Math.min(1, t * 200) * Math.exp(-t * 3.2);
+        let s = 0; for (const [m, a] of partials) s += a * Math.sin(2 * Math.PI * freq * m * t);
+        d[off + i] += s * env * level;
+      }
+    }
+    return buf;
+  }
+  buffers.bell1 = makeBell(1, 880, 0, 1.6, .35);
+  buffers.bell2 = makeBell(2, 880, .55, 1.6, .35);
+  buffers.bell3 = makeBell(3, 660, .45, 1.8, .35);
+  buffers.bellw = makeBell(2, 1320, .25, .9, .22);
+
+  const ready = Promise.all(CLIPS.map(async c => {
+    try {
+      const r = await fetch("audio/" + c + ".mp3");
+      const ab = await r.arrayBuffer();
+      buffers[c] = await new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej));
+    } catch (e) { console.warn("Gagal memuat suara", c, e); }
+  }));
+
+  function playSeq(seq, when) {
+    const voice = $("voice").checked;
+    let t = Math.max(when, ctx.currentTime);
+    for (const it of seq) {
+      const buf = it.bell !== undefined ? buffers["bell" + it.bell] : (voice ? buffers[it.clip] : null);
+      if (!buf) continue;
+      const s = ctx.createBufferSource(); s.buffer = buf; s.connect(master); s.start(t);
+      live.push(s);
+      t += it.bell !== undefined ? (it.bell === 3 ? 1.3 : it.bell === 2 ? .9 : .6) : buf.duration + .25;
+    }
+  }
+  function stopAll() { live.forEach(s => { try { s.stop(); } catch {} }); live = []; }
+  function scheduleFrom(e) {
+    stopAll();
+    for (const ev of events) if (ev.t >= e - 0.05) playSeq(ev.seq, t0 + ev.t);
+  }
+
+  /* ---------- run state ---------- */
+  let state = "idle", t0 = 0, pausedAt = 0, wakeLock = null, jumped = false;
+  const elapsed = () => state === "running" ? ctx.currentTime - t0 : pausedAt;
+
+  async function unlock() {
+    if (ctx.state !== "running") await ctx.resume();
+    const k = $("keepAlive"); k.volume = 0.01; k.play().catch(() => {});
+    await ready;
+  }
+  async function keepAwake() {
+    try { if ("wakeLock" in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => wakeLock = null); } } catch {}
+  }
+  function releaseAwake() { try { wakeLock && wakeLock.release(); } catch {} wakeLock = null; }
+
+  async function start() {
+    const cfg = readCfg();
+    if (cfg.ujian <= 0) { alert("Durasi ujian harus lebih dari 0."); return; }
+    await unlock();
+    build(cfg);
+    state = "running"; t0 = ctx.currentTime + 0.1;
+    scheduleFrom(0); keepAwake(); refreshButtons();
+  }
+  function pause() {
+    if (state !== "running") return;
+    pausedAt = Math.max(0, elapsed()); state = "paused"; jumped = false; stopAll();
+    if ($("pauseVoice").checked) playSeq([{ bell: "w" }, { clip: "jeda" }], ctx.currentTime);
+    refreshButtons();
+  }
+  async function resume() {
+    if (state !== "paused") return;
+    await unlock();
+    let lead = 0;
+    if ($("pauseVoice").checked) { playSeq([{ bell: "w" }, { clip: "lanjut" }], ctx.currentTime); lead = 2.2; }
+    const keep = live.slice();
+    t0 = ctx.currentTime + lead - pausedAt; state = "running";
+    scheduleFrom(pausedAt + (jumped ? -0.01 : 0.06)); live = live.concat(keep); jumped = false;
+    keepAwake(); refreshButtons();
+  }
+  function jumpTo(e) {
+    e = Math.max(0, Math.min(total, e));
+    if (state === "running") { t0 = ctx.currentTime - e; scheduleFrom(e); }
+    else if (state === "paused") { pausedAt = e; jumped = true; }
+    render();
+  }
+  function skip() {
+    if (state !== "running" && state !== "paused") return;
+    const i = phaseAt(elapsed());
+    jumpTo(i + 1 < phases.length ? phases[i + 1].start : total);
+  }
+  function back() {
+    if (state !== "running" && state !== "paused") return;
+    const e = elapsed(), i = phaseAt(e);
+    jumpTo(e - phases[i].start > 3 || i === 0 ? phases[i].start : phases[i - 1].start);
+  }
+  function reset() {
+    if (state !== "idle" && state !== "done" && !confirm("Hentikan dan ulang timer dari awal?")) return;
+    stopAll(); state = "idle"; releaseAwake(); refreshButtons(); render();
+  }
+  function finish() { state = "done"; releaseAwake(); refreshButtons(); }
+
+  /* ---------- UI ---------- */
+  const fmt = s => {
+    s = Math.max(0, Math.ceil(s - 1e-6));
+    const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60, p = n => String(n).padStart(2, "0");
+    return h ? `${h}:${p(m)}:${p(x)}` : `${p(m)}:${p(x)}`;
+  };
+  const clockTime = d => d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+  const stage = $("stage");
+
+  function setPhaseColor(type) { stage.style.setProperty("--phase", COLOR[type] || "var(--muted)"); }
+
+  function render() {
+    stage.classList.toggle("paused", state === "paused");
+    if (state === "idle") {
+      const cfg = readCfg(); build(cfg); setPhaseColor(null);
+      $("phaseLabel").textContent = "Siap";
+      $("clock").textContent = fmt(cfg.baca || cfg.ujian); $("clock").classList.remove("warn");
+      $("rotLabel").textContent = `${cfg.stations} stasiun · tekan Mulai`;
+      $("nextLabel").textContent = "";
+      $("totalLine").textContent = `Total durasi ${fmt(total)}`;
+      $("bar").style.width = "0";
+      return;
+    }
+    let e = elapsed();
+    if (state === "running" && e >= total) finish();
+    if (state === "done") {
+      setPhaseColor("selesai");
+      $("phaseLabel").textContent = "Ujian selesai";
+      $("clock").textContent = "00:00"; $("clock").classList.remove("warn");
+      $("rotLabel").textContent = `${phases.filter(p => p.type === "ujian").length} stasiun selesai`;
+      $("nextLabel").textContent = ""; $("totalLine").textContent = "";
+      $("bar").style.width = "100%";
+      return;
+    }
+    e = Math.max(0, e);
+    const i = phaseAt(e), p = phases[i], left = p.start + p.dur - e, nx = phases[i + 1];
+    setPhaseColor(p.type);
+    $("phaseLabel").textContent = LABEL[p.type];
+    $("clock").textContent = fmt(left);
+    const cfgWarn = Number($("warn").value);
+    $("clock").classList.toggle("warn", p.type === "ujian" && cfgWarn > 0 && cfgWarn < p.dur && left <= cfgWarn);
+    $("rotLabel").textContent = p.type === "pindah"
+      ? `Menuju stasiun ${p.rot + 1} dari ${phases.filter(q => q.type === "ujian").length}`
+      : `Stasiun ${p.rot} dari ${phases.filter(q => q.type === "ujian").length}`;
+    $("nextLabel").textContent = nx ? `Berikutnya: ${LABEL[nx.type]} (${fmt(nx.dur)})` : "Berikutnya: ujian selesai";
+    $("bar").style.width = (100 * (e - p.start) / p.dur).toFixed(2) + "%";
+    const remain = total - e;
+    $("totalLine").textContent = `Sisa total ${fmt(remain)}` +
+      (state === "running" ? ` · perkiraan selesai pukul ${clockTime(new Date(Date.now() + remain * 1000))}` : "");
+  }
+
+  function refreshButtons() {
+    const active = state === "running" || state === "paused";
+    $("btnStart").disabled = active;
+    $("btnStart").textContent = state === "done" ? "▶ Mulai lagi" : "▶ Mulai";
+    $("btnPause").disabled = !active;
+    $("btnPause").textContent = state === "paused" ? "▶ Lanjut" : "⏸ Jeda";
+    $("btnSkip").disabled = !active; $("btnBack").disabled = !active;
+    $("btnReset").disabled = state === "idle";
+    $("cfgFields").disabled = active;
+    render();
+  }
+
+  function updateSummary() {
+    const cfg = readCfg(); build(cfg);
+    const rot = cfg.baca + cfg.ujian + cfg.pindah;
+    $("summary").textContent = `Satu rotasi ${fmt(rot)}. ${cfg.stations} stasiun, total ${fmt(total)}` +
+      (cfg.pindah > 0 ? " (tanpa waktu pindah setelah stasiun terakhir)." : ".");
+    if (state === "idle") render();
+  }
+
+  /* ---------- presets ---------- */
+  function listPresets() {
+    const ps = store.get(LS_PRESETS, {}), sel = $("presetList"), cur = sel.value;
+    sel.innerHTML = '<option value="">— pilih preset —</option>';
+    Object.keys(ps).sort().forEach(n => { const o = document.createElement("option"); o.value = o.textContent = n; sel.appendChild(o); });
+    if (ps[cur]) sel.value = cur;
+  }
+  $("btnSavePreset").onclick = () => {
+    const name = $("presetName").value.trim();
+    if (!name) { $("presetName").focus(); return; }
+    const ps = store.get(LS_PRESETS, {});
+    if (ps[name] && !confirm(`Timpa preset "${name}"?`)) return;
+    ps[name] = snapshot(); store.set(LS_PRESETS, ps); listPresets(); $("presetList").value = name; $("presetName").value = "";
+  };
+  $("btnLoadPreset").onclick = () => {
+    const n = $("presetList").value, ps = store.get(LS_PRESETS, {});
+    if (!n || !ps[n] || state === "running" || state === "paused") return;
+    applySnapshot(ps[n]); onCfgChange();
+  };
+  $("btnDelPreset").onclick = () => {
+    const n = $("presetList").value, ps = store.get(LS_PRESETS, {});
+    if (!n || !ps[n] || !confirm(`Hapus preset "${n}"?`)) return;
+    delete ps[n]; store.set(LS_PRESETS, ps); listPresets();
+  };
+
+  /* ---------- wiring ---------- */
+  function onCfgChange() {
+    master.gain.value = Number($("volume").value);
+    store.set(LS_CFG, snapshot()); updateSummary();
+  }
+  FIELDS.forEach(f => { $(f).addEventListener("input", onCfgChange); $(f).addEventListener("change", onCfgChange); });
+
+  $("btnStart").onclick = start;
+  $("btnPause").onclick = () => state === "paused" ? resume() : pause();
+  $("btnSkip").onclick = skip;
+  $("btnBack").onclick = back;
+  $("btnReset").onclick = reset;
+  $("btnTest").onclick = async () => {
+    await unlock();
+    const w = Number($("warn").value) || 60;
+    const map = {
+      baca: [{ bell: 1 }, { clip: "baca" }], ujian: [{ bell: 2 }, { clip: "masuk" }],
+      peringatan: [{ bell: "w" }, { clip: WARN_CLIP[w] }], pindah: [{ bell: 3 }, { clip: "pindah" }],
+      selesai: [{ bell: 3 }, { clip: "selesai" }]
+    };
+    playSeq(map[$("testSel").value], ctx.currentTime + 0.05);
+  };
+
+  function toggleFs() {
+    const on = !document.fullscreenElement && !document.webkitFullscreenElement;
+    if (on) {
+      const req = stage.requestFullscreen || stage.webkitRequestFullscreen;
+      if (req) req.call(stage).catch?.(() => stage.classList.add("fs")); else stage.classList.toggle("fs");
+    } else (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  }
+  const fsSync = () => stage.classList.toggle("fs", !!(document.fullscreenElement || document.webkitFullscreenElement));
+  document.addEventListener("fullscreenchange", fsSync);
+  document.addEventListener("webkitfullscreenchange", fsSync);
+  $("btnFs").onclick = toggleFs;
+
+  document.addEventListener("keydown", e => {
+    if (e.target.matches("input, select, textarea")) return;
+    if (e.code === "Space") { e.preventDefault(); if (state === "running") pause(); else if (state === "paused") resume(); else if (state === "idle" || state === "done") start(); }
+    else if (e.key === "ArrowRight") skip();
+    else if (e.key === "ArrowLeft") back();
+    else if (e.key === "f" || e.key === "F") toggleFs();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && (state === "running" || state === "paused")) keepAwake();
+  });
+  window.addEventListener("beforeunload", e => { if (state === "running" || state === "paused") { e.preventDefault(); e.returnValue = ""; } });
+
+  (function loop() { if (state !== "idle") render(); requestAnimationFrame(loop); })();
+  setInterval(() => { if (state === "running") render(); }, 500);
+
+  applySnapshot(store.get(LS_CFG, null));
+  master.gain.value = Number($("volume").value);
+  listPresets(); updateSummary(); refreshButtons();
+
+  if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(() => {});
+})();
+</script>
+</body>
+</html>
